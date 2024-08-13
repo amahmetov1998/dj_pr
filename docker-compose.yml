@@ -1,0 +1,58 @@
+version: "3.8"
+
+x-environment-defaults: &environment-defaults
+  DB_HOST: db
+  DB_NAME: dbname
+  DB_USER: dbuser
+  DB_PASS: pass
+  EMAIL_HOST: smtp.email.ru
+  EMAIL_PORT: 465
+  EMAIL_HOST_PASSWORD: pass
+  EMAIL_HOST_USER: example@email.ru
+  CELERY_BROKER_URL: amqp://login:password@rabbit:5672/
+  SECRET_KEY: secret
+
+services:
+
+  db:
+    image: postgres:latest
+    container_name: db
+    environment:
+      POSTGRES_USER: dbuser
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: dbname
+    ports:
+      - 5432:5432
+
+  rabbit:
+    restart: always
+    image: rabbitmq:management
+    container_name: rabbit
+    ports:
+      - 15672:15672
+    expose:
+      - "15672"
+
+  celery:
+    restart: always
+    build: .
+    environment:
+      <<: *environment-defaults
+    container_name: celery
+    command: celery -A send_email worker -l info
+    depends_on:
+      - rabbit
+
+  web:
+    restart: always
+    build: .
+    environment:
+      <<: *environment-defaults
+    command: >
+      bash -c "python /app/manage.py migrate && python /app/manage.py runserver 0.0.0.0:8000"
+    ports:
+      - 8000:8000
+    depends_on:
+      - db
+      - celery
+      - rabbit
